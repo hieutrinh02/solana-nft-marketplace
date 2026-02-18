@@ -19,7 +19,7 @@ This repository contains a minimal NFT marketplace implementation on Solana usin
 - Secure escrow design
 - Constraint-based validation in Anchor
 
-The focus of this project is smart contract correctness, safety, and clean account design.
+The focus of this project is program correctness, safety, and clean account design.
 
 ## 📄 High-level protocol design
 
