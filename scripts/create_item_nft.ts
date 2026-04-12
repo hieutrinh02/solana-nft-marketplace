@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 
 import {
     createNft,
+    findMasterEditionPda,
     findMetadataPda,
     mplTokenMetadata,
     verifyCollectionV1,
@@ -17,11 +18,11 @@ import {
 import { createUmi } from "@metaplex-foundation/umi-bundle-defaults";
 import { Connection, Keypair, PublicKey } from "@solana/web3.js";
 
-const DEFAULT_NAME = "Marketplace NFT";
+const DEFAULT_NAME = "Marketplace NFT 03";
 const DEFAULT_SYMBOL = "MNFT";
 const DEFAULT_URI =
-    "https://raw.githubusercontent.com/hieutrinh02/solana-nft-marketplace-program/main/assets/nft/item_01.json";
-const COLLECTION_MINT = "PASTE_COLLECTION_MINT_HERE";
+    "https://raw.githubusercontent.com/hieutrinh02/solana-nft-marketplace-program/main/assets/nft/item_03.json";
+const COLLECTION_MINT = "8AMGnDMKQiWEvEf84AQe3EJnNbragwTL6bQ36XupzdcJ";
 
 function requireEnv(name: string): string {
     const value = process.env[name];
@@ -31,7 +32,7 @@ function requireEnv(name: string): string {
     return value;
 }
 
-function getAdminKeypair(): Keypair {
+function getKeypair(): Keypair {
     const keypairPath = requireEnv("ADMIN_KEYPAIR_PATH");
     const secret = JSON.parse(readFileSync(keypairPath, "utf8")) as number[];
     return Keypair.fromSecretKey(Uint8Array.from(secret));
@@ -39,7 +40,7 @@ function getAdminKeypair(): Keypair {
 
 async function main() {
     const rpcUrl = requireEnv("RPC_URL");
-    const authority = getAdminKeypair();
+    const authority = getKeypair();
     const connection = new Connection(rpcUrl, "confirmed");
     const umi = createUmi(connection).use(mplTokenMetadata());
     const umiKeypair = umi.eddsa.createKeypairFromSecretKey(authority.secretKey);
@@ -61,7 +62,8 @@ async function main() {
     }).sendAndConfirm(umi);
 
     const itemMint = new PublicKey(mintSigner.publicKey);
-    const itemMetadata = findMetadataPda(umi, { mint: publicKey(itemMint) });
+    const [itemMetadata] = findMetadataPda(umi, { mint: publicKey(itemMint) });
+    const [itemMasterEdition] = findMasterEditionPda(umi, { mint: publicKey(itemMint) });
 
     await verifyCollectionV1(umi, {
         metadata: itemMetadata,
@@ -77,6 +79,7 @@ async function main() {
     console.log(`URI: ${DEFAULT_URI}`);
     console.log(`Mint: ${itemMint.toBase58()}`);
     console.log(`Metadata: ${itemMetadata}`);
+    console.log(`Master Edition: ${itemMasterEdition}`);
 }
 
 main().catch((error) => {

@@ -23,6 +23,7 @@ The goal of this project is to explore:
 - Strict NFT policy enforcement for cleaner protocol semantics
 
 The focus of this project is program correctness, safety, and a clean on-chain core.
+For read-side indexing and local UI interaction, see [`solana-nft-marketplace-indexer`](https://github.com/hieutrinh02/solana-nft-marketplace-indexer) and [`solana-nft-marketplace-fe`](https://github.com/hieutrinh02/solana-nft-marketplace-fe).
 
 ## 🌐 Deployed Program
 

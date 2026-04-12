@@ -30,7 +30,7 @@ function requireEnv(name: string): string {
     return value;
 }
 
-function getAdminKeypair(): Keypair {
+function getKeypair(): Keypair {
     const keypairPath = requireEnv("ADMIN_KEYPAIR_PATH");
     const secret = JSON.parse(readFileSync(keypairPath, "utf8")) as number[];
     return Keypair.fromSecretKey(Uint8Array.from(secret));
@@ -38,7 +38,7 @@ function getAdminKeypair(): Keypair {
 
 async function main() {
     const rpcUrl = requireEnv("RPC_URL");
-    const authority = getAdminKeypair();
+    const authority = getKeypair();
     const connection = new Connection(rpcUrl, "confirmed");
     const umi = createUmi(connection).use(mplTokenMetadata());
     const umiKeypair = umi.eddsa.createKeypairFromSecretKey(authority.secretKey);
@@ -56,8 +56,8 @@ async function main() {
     }).sendAndConfirm(umi);
 
     const mint = new PublicKey(mintSigner.publicKey);
-    const metadata = findMetadataPda(umi, { mint: publicKey(mint) });
-    const masterEdition = findMasterEditionPda(umi, { mint: publicKey(mint) });
+    const [metadata] = findMetadataPda(umi, { mint: publicKey(mint) });
+    const [masterEdition] = findMasterEditionPda(umi, { mint: publicKey(mint) });
 
     console.log(`RPC URL: ${rpcUrl}`);
     console.log(`Authority: ${authority.publicKey.toBase58()}`);
