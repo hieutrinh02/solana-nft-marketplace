@@ -1,12 +1,12 @@
 [package]
-name = "solana_nft_marketplace"
-version = "0.1.0"
+name = "solana_nft_marketplace_program"
+version = "0.2.0"
 description = "Created with Anchor"
 edition = "2021"
 
 [lib]
 crate-type = ["cdylib", "lib"]
-name = "solana_nft_marketplace"
+name = "solana_nft_marketplace_program"
 
 [features]
 default = []
@@ -23,6 +23,7 @@ custom-panic = []
 [dependencies]
 anchor-lang = { version = "0.32.1", features = ["init-if-needed"] }
 anchor-spl = { version = "0.32.1", features = ["default"] }
+mpl-token-metadata = "5.1.1"
 
 
 [lints.rust]

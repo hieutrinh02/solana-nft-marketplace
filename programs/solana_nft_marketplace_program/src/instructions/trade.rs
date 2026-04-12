@@ -1,9 +1,13 @@
 use anchor_lang::prelude::*;
-use anchor_spl::associated_token::AssociatedToken;
-use anchor_spl::token::{self, CloseAccount, Mint, Token, TokenAccount, Transfer};
+use anchor_spl::{
+    associated_token::AssociatedToken,
+    token::{self, CloseAccount, Mint, Token, TokenAccount, Transfer},
+};
+use mpl_token_metadata::{
+    accounts::Metadata, types::TokenStandard, ID as TOKEN_METADATA_PROGRAM_ID,
+};
 
-use crate::errors::Error;
-use crate::state::Listing;
+use crate::{errors::Error, state::Listing};
 
 // -------------------------------
 // Accounts
@@ -47,6 +51,9 @@ pub struct List<'info> {
     )]
     pub escrow_nft_ata: Account<'info, TokenAccount>,
 
+    /// CHECK: validated against the Metaplex metadata PDA and deserialized in `list`.
+    pub metadata: UncheckedAccount<'info>,
+
     pub token_program: Program<'info, Token>,
     pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>,
@@ -58,6 +65,7 @@ pub struct Cancel<'info> {
     #[account(mut)]
     pub seller: Signer<'info>,
 
+    /// The mint of the NFT being listed.
     pub mint: Account<'info, Mint>,
 
     /// Listing PDA must match seeds and must belong to this seller/mint pair.
@@ -88,8 +96,6 @@ pub struct Cancel<'info> {
     pub escrow_nft_ata: Account<'info, TokenAccount>,
 
     pub token_program: Program<'info, Token>,
-    pub associated_token_program: Program<'info, AssociatedToken>,
-    pub system_program: Program<'info, System>,
 }
 
 #[derive(Accounts)]
@@ -98,13 +104,15 @@ pub struct Buy<'info> {
     #[account(mut)]
     pub buyer: Signer<'info>,
 
-    /// Seller receiving SOL + rent refunds from close.
-    /// CHECK: verified via `listing.has_one = seller`
+    /// Seller receiving SOL and rent refunds from close.
+    /// CHECK: verified via `listing.has_one = seller` and used as close recipient only.
     #[account(mut)]
     pub seller: UncheckedAccount<'info>,
 
+    /// The mint of the NFT being listed.
     pub mint: Account<'info, Mint>,
 
+    /// Listing PDA must match seeds and must belong to this seller/mint pair.
     #[account(
         mut,
         seeds = [Listing::SEED_PREFIX, mint.key().as_ref()],
@@ -143,20 +151,51 @@ pub struct Buy<'info> {
 
 pub fn list(ctx: Context<List>, price: u64) -> Result<()> {
     // --- Validations ---
-    require!(price > 0, Error::InvalidPrice);
+    require!(price > 0, Error::InvalidListingPrice);
     require!(ctx.accounts.mint.decimals == 0, Error::InvalidMintDecimals);
     require!(ctx.accounts.mint.supply == 1, Error::InvalidMintSupply);
     require!(
-        ctx.accounts.mint.mint_authority.is_none(),
-        Error::InvalidMintAuthority
-    );
-    require!(
-        ctx.accounts.mint.freeze_authority.is_none(),
-        Error::InvalidFreezeAuthority
-    );
-    require!(
         ctx.accounts.seller_nft_ata.amount == 1,
         Error::InvalidNftAmount
+    );
+    require!(
+        *ctx.accounts.metadata.to_account_info().owner == TOKEN_METADATA_PROGRAM_ID,
+        Error::InvalidMetadataOwner
+    );
+
+    let (expected_metadata, _) = Metadata::find_pda(&ctx.accounts.mint.key());
+    require!(
+        ctx.accounts.metadata.key() == expected_metadata,
+        Error::InvalidMetadataAccount
+    );
+
+    let metadata_account = Metadata::safe_deserialize(&ctx.accounts.metadata.data.borrow())
+        .map_err(|_| error!(Error::InvalidMetadataAccount))?;
+
+    require!(
+        metadata_account.mint == ctx.accounts.mint.key(),
+        Error::MetadataMintMismatch
+    );
+    require!(
+        metadata_account.collection_details.is_none(),
+        Error::CollectionNftNotSupported
+    );
+    require!(
+        metadata_account.uses.is_none(),
+        Error::MetadataUsesNotSupported
+    );
+
+    let collection = metadata_account
+        .collection
+        .ok_or_else(|| error!(Error::MetadataCollectionRequired))?;
+    require!(collection.verified, Error::MetadataCollectionNotVerified);
+
+    require!(
+        matches!(
+            metadata_account.token_standard,
+            Some(TokenStandard::NonFungible)
+        ),
+        Error::UnsupportedMetadataTokenStandard
     );
 
     // --- Store listing state ---
@@ -222,14 +261,13 @@ pub fn cancel(ctx: Context<Cancel>) -> Result<()> {
     // Listing account will be closed automatically via `close = seller`
     Ok(())
 }
-
 pub fn buy(ctx: Context<Buy>) -> Result<()> {
     // --- Validations ---
     require!(
         ctx.accounts.buyer.key() != ctx.accounts.seller.key(),
-        Error::SelfBuyNotAllowed
+        Error::BuyOwnListingNotAllowed
     );
-    require!(ctx.accounts.listing.price > 0, Error::InvalidPrice);
+    require!(ctx.accounts.listing.price > 0, Error::InvalidListingPrice);
     require!(
         ctx.accounts.escrow_nft_ata.amount == 1,
         Error::InvalidEscrowAmount
